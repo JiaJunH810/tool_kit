@@ -115,7 +115,7 @@ class MotionViewEnv:
 
 
 if __name__ == "__main__":
-    motion_path = "mujoco/pkl/combine.pkl"
+    motion_path = "assets/pkl/combine.pkl"
     model_path = "mujoco/g1_23dof.xml"
     
     device = "cuda" if torch.cuda.is_available() else "cpu"

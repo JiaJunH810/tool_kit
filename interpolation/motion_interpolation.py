@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 import pickle
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
@@ -9,14 +9,16 @@ DOF_AXIS_FILE = "interpolation/g1_23dof_axis.npy"  # 存储自由度轴的npy文
 
 # 对下半身自由度进行特殊插值处理
 def lower_dof_interpolation(start_dof,end_dof,nframe):
-    mid_frame = nframe // 2
+    mid_frame = nframe // 2     # 插帧只插要求的一半？
     quat_frame = mid_frame // 2
+    # endpoint=False说明不包含结束点
     left_lower_dof = np.linspace(start_dof[:6], end_dof[:6],
                     num=mid_frame+1,
                     endpoint=False)[1:].reshape(-1, 6)
     right_lower_dof = np.linspace(start_dof[6:12], end_dof[6:12],
                     num=mid_frame+1,
                     endpoint=False)[1:].reshape(-1, 6)
+    # 对膝盖的插帧分两次, 起始->1.0; 1.0->结尾
     left_knee_1 = np.linspace(start_dof[3], 1.0,
                     num=quat_frame).reshape(-1, 1)
     left_knee_2 = np.linspace(1.0, end_dof[3],
@@ -129,6 +131,8 @@ def interpolate_motion(input_data, start_ext_frames, end_ext_frames, default_pos
             start_dof = np.concatenate((lower_start_dof,upper_start_dof),axis=1)
         else: 
             #  linear interpolation
+            # 对所有关节都进行简单的线性插帧
+            # endpoint=False就是线性插帧的不包含结束点,也就是最后一帧不会是dof_pos[0]
             start_dof = np.linspace(default_dof, dof_pos[0],
                                     num=start_ext_frames + 1,
                                     endpoint=False)[1:].reshape(-1, 23)
@@ -170,11 +174,13 @@ def interpolate_motion(input_data, start_ext_frames, end_ext_frames, default_pos
             lower_end_dof = lower_dof_interpolation(dof_pos[-1][0:12],default_dof[0:12],end_ext_frames)
             end_dof = np.concatenate((lower_end_dof,upper_end_dof),axis=1)
         else:
+
             end_dof = np.linspace(dof_pos[-1], default_dof,num=end_ext_frames + 1)[1:].reshape(-1, 23)
         
         if not fix_root_rot:
             # root rot
             # end_rotations = R.from_quat([root_rot[-1], default_rr])
+            # 保持yaw固定，只对pitch和roll进行插值
             end_rotations = R.from_euler('ZYX', 
                                         [   np.concatenate((end_rot_aa[0:1],default_rr_aa[1:])), 
                                             np.concatenate((end_rot_aa[0:1],end_rot_aa[1:]))  ])

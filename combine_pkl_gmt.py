@@ -2,6 +2,7 @@ import joblib
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
+import pickle
 import sys
 
 def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame):
@@ -26,11 +27,11 @@ def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, f
 
 def process_motion_sequences(seq1, seq2):
     # 获取seq1的最后一帧 作为第二序列的起点
-    last_trans_s1 = seq1['root_trans_offset'][-1]
+    last_trans_s1 = seq1['root_pos'][-1]
     last_rot_s1 = R.from_quat(seq1['root_rot'][-1])
 
     # 获取seq2的第一帧 作为对齐的帧
-    first_trans_s2 = seq2['root_trans_offset'][0]
+    first_trans_s2 = seq2['root_pos'][0]
     first_rot_s2 = R.from_quat(seq2['root_rot'][0])
 
     # 对齐偏移量
@@ -52,7 +53,7 @@ def process_motion_sequences(seq1, seq2):
     for i in range(len(seq2['root_rot'])):
 
         curr_rot_s2 = R.from_quat(seq2['root_rot'][i])
-        curr_trans_s2 = seq2['root_trans_offset'][i]
+        curr_trans_s2 = seq2['root_pos'][i]
 
         delta_trans_world = curr_trans_s2 - first_trans_s2
         # delta_yaw_rot是yaw2->yaw1的旋转，所以这里相当于直接获得了旋转后的全局坐标系
@@ -63,14 +64,14 @@ def process_motion_sequences(seq1, seq2):
 
         new_trans.append(final_trans)
         new_rot.append(final_rot.as_quat())
-        new_dof.append(seq2['dof'][i])
+        new_dof.append(seq2['dof_pos'][i])
     
-    inter_trans, inter_rot, inter_dof = make_interpolation(seq1['root_trans_offset'][-1], new_trans[0],
-                                        seq1['root_rot'][-1], new_rot[0], seq1['dof'][-1], new_dof[0], 30)
+    inter_trans, inter_rot, inter_dof = make_interpolation(seq1['root_pos'][-1], new_trans[0],
+                                        seq1['root_rot'][-1], new_rot[0], seq1['dof_pos'][-1], new_dof[0], 30)
     
-    new_trans = list(seq1['root_trans_offset']) + list(inter_trans) + new_trans
+    new_trans = list(seq1['root_pos']) + list(inter_trans) + new_trans
     new_rot = list(seq1['root_rot']) + list(inter_rot) + new_rot
-    new_dof = list(seq1['dof']) + list(inter_dof) + new_dof
+    new_dof = list(seq1['dof_pos']) + list(inter_dof) + new_dof
     return new_trans, new_rot, new_dof
 
 def main(pkl_path1, pkl_path2):
@@ -78,22 +79,20 @@ def main(pkl_path1, pkl_path2):
     motion2 = joblib.load(pkl_path2)
 
     motion = motion1.copy()
-    k = list(motion.keys())[0]
-
-    motion_data1 = motion1[list(motion1.keys())[0]]
-    motion_data2 = motion2[list(motion2.keys())[0]]
 
     # 处理运动序列
-    new_trans, new_rots, new_dofs = process_motion_sequences(motion_data1, motion_data2)
+    new_trans, new_rots, new_dofs = process_motion_sequences(motion1, motion2)
 
-    motion[k]['root_trans_offset'] = np.array(new_trans)
-    motion[k]['root_rot'] = np.array(new_rots)
-    motion[k]['dof'] = np.array(new_dofs)
-    print(motion[k]['dof'].shape)
-    joblib.dump(motion, "/home/ubuntu/projects/tool_kit/assets/pkl/combine.pkl")
+    motion['root_pos'] = np.array(new_trans)
+    motion['root_rot'] = np.array(new_rots)
+    motion['dof_pos'] = np.array(new_dofs)
+
+    output_file = "/home/ubuntu/projects/tool_kit/assets/pkl/combine_gmt.pkl"
+    with open(output_file, "wb") as f:
+        pickle.dump(motion, f)
 
 if __name__ == "__main__":
-    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/UpRightWalk.pkl"
-    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/UpRightWalk.pkl"
+    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/walk_stand.pkl"
+    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/dance.pkl"
 
     main(pkl_path1, pkl_path2)

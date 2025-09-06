@@ -69,6 +69,6 @@ def save_to_csv(data_rows, keys, output_file='training_logs.csv'):
     print(f"CSV file saved to: {os.path.abspath(output_file)}")
 
 # 主程序
-file_path = "/home/ubuntu/projects/tool_kit/nohup_csv/nohup/nohup_0901_01_GentleWalk"
+file_path = "/home/ubuntu/projects/tool_kit/assets/nohup/nohup_0905_01_Walk-Bendover"
 data_rows, keys = parse_training_logs(file_path)
-save_to_csv(data_rows, keys, f"./nohup_csv/csv/{file_path.split('/')[-1]}.csv")
+save_to_csv(data_rows, keys, f"./assets/csv/{file_path.split('/')[-1]}.csv")
