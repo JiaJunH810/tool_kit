@@ -4,23 +4,17 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 import sys
 
-def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame):
-    make_trans = np.zeros((num_frame, 3))
-    make_trans[:, 0] = last_trans[0]
-    make_trans[:, 1] = last_trans[1]
-    make_trans[:, 2] = np.linspace(last_trans[2], first_trans[2], num=num_frame)
+def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame=30):
 
-    make_dof = np.linspace(last_dof, first_dof, num=num_frame).reshape(num_frame, -1)
+    make_trans = np.linspace(last_trans, first_trans, num=num_frame)
 
-    last_euler = R.from_quat(last_rot).as_euler('ZYX')
-    first_euler = R.from_quat(first_rot).as_euler('ZYX')
-    rotations = R.from_euler('ZYX',
-                             [np.concatenate((last_euler[0:1], first_euler[1:])),
-                              np.concatenate((last_euler[0:1], last_euler[1:]))])
-    times = np.linspace(0, 1, num_frame)
-    slerp = Slerp([0, 1], rotations)
-    interp_rots = slerp(times).as_euler('ZYX')
-    make_rot = R.from_euler('ZYX', interp_rots).as_quat()
+    key_times = [0, 1]
+    key_rots = R.from_quat([last_rot, first_rot])
+    slerp = Slerp(key_times, key_rots)
+    interp_rots = slerp(np.linspace(0, 1, num_frame))
+    make_rot = interp_rots.as_quat()
+
+    make_dof = np.linspace(last_dof, first_dof, num=num_frame)
 
     return make_trans, make_rot, make_dof
 
@@ -93,7 +87,7 @@ def main(pkl_path1, pkl_path2):
     joblib.dump(motion, "/home/ubuntu/projects/tool_kit/assets/pkl/combine.pkl")
 
 if __name__ == "__main__":
-    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/UpRightWalk.pkl"
-    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/UpRightWalk.pkl"
+    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/slowwalk_05_01_high_inter.pkl"
+    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/Walk-Bendover_walkback.pkl"
 
     main(pkl_path1, pkl_path2)
