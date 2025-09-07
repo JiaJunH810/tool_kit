@@ -5,23 +5,17 @@ from scipy.spatial.transform import Slerp
 import pickle
 import sys
 
-def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame):
-    make_trans = np.zeros((num_frame, 3))
-    make_trans[:, 0] = last_trans[0]
-    make_trans[:, 1] = last_trans[1]
-    make_trans[:, 2] = np.linspace(last_trans[2], first_trans[2], num=num_frame)
+def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame=30):
 
-    make_dof = np.linspace(last_dof, first_dof, num=num_frame).reshape(num_frame, -1)
+    make_trans = np.linspace(last_trans, first_trans, num=num_frame)
 
-    last_euler = R.from_quat(last_rot).as_euler('ZYX')
-    first_euler = R.from_quat(first_rot).as_euler('ZYX')
-    rotations = R.from_euler('ZYX',
-                             [np.concatenate((last_euler[0:1], first_euler[1:])),
-                              np.concatenate((last_euler[0:1], last_euler[1:]))])
-    times = np.linspace(0, 1, num_frame)
-    slerp = Slerp([0, 1], rotations)
-    interp_rots = slerp(times).as_euler('ZYX')
-    make_rot = R.from_euler('ZYX', interp_rots).as_quat()
+    key_times = [0, 1]
+    key_rots = R.from_quat([last_rot, first_rot])
+    slerp = Slerp(key_times, key_rots)
+    interp_rots = slerp(np.linspace(0, 1, num_frame))
+    make_rot = interp_rots.as_quat()
+
+    make_dof = np.linspace(last_dof, first_dof, num=num_frame)
 
     return make_trans, make_rot, make_dof
 
@@ -74,25 +68,28 @@ def process_motion_sequences(seq1, seq2):
     new_dof = list(seq1['dof_pos']) + list(inter_dof) + new_dof
     return new_trans, new_rot, new_dof
 
-def main(pkl_path1, pkl_path2):
-    motion1 = joblib.load(pkl_path1)
-    motion2 = joblib.load(pkl_path2)
+def main(pkl_lists):
+    motion = joblib.load(pkl_lists[0])
+    
+    for i in range(1, len(pkl_lists)):
+        motion1 = motion.copy()
+        motion2 = joblib.load(pkl_lists[i])
 
-    motion = motion1.copy()
+        # 处理运动序列
+        new_trans, new_rots, new_dofs = process_motion_sequences(motion1, motion2)
 
-    # 处理运动序列
-    new_trans, new_rots, new_dofs = process_motion_sequences(motion1, motion2)
-
-    motion['root_pos'] = np.array(new_trans)
-    motion['root_rot'] = np.array(new_rots)
-    motion['dof_pos'] = np.array(new_dofs)
+        motion['root_pos'] = np.array(new_trans)
+        motion['root_rot'] = np.array(new_rots)
+        motion['dof_pos'] = np.array(new_dofs)
 
     output_file = "/home/ubuntu/projects/tool_kit/assets/pkl/combine_gmt.pkl"
     with open(output_file, "wb") as f:
         pickle.dump(motion, f)
 
 if __name__ == "__main__":
-    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/walk_stand.pkl"
-    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/dance.pkl"
-
-    main(pkl_path1, pkl_path2)
+    pkl_lists = [
+        "/home/ubuntu/projects/tool_kit/assets/pkl/walk_stand.pkl",
+        "/home/ubuntu/projects/tool_kit/assets/pkl/cut_squat.pkl",
+        "/home/ubuntu/projects/tool_kit/assets/pkl/cut_dance.pkl"
+    ]
+    main(pkl_lists)
