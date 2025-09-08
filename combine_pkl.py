@@ -4,21 +4,27 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 import sys
 
+def obtain_pose_aa(root_rot, dof_pos, dof_axis):
+    pose_aa = np.zeros((1 + len(dof_pos), 3))
+    pose_aa[0] = R.from_quat(root_rot).as_euler('xyz', degrees=False)
+    pose_aa[1:] = dof_pos.reshape(-1, 1) * dof_axis
+    return pose_aa
+
 def make_interpolation(last_trans, first_trans, last_rot, first_rot, last_dof, first_dof, num_frame=30):
 
     make_trans = np.linspace(last_trans, first_trans, num=num_frame)
 
-    key_times = [0, 1]
-    key_rots = R.from_quat([last_rot, first_rot])
-    slerp = Slerp(key_times, key_rots)
-    interp_rots = slerp(np.linspace(0, 1, num_frame))
+    key_times = [0, 1]      # 创建时间点
+    key_rots = R.from_quat([last_rot, first_rot])   # 起始旋转和终止旋转
+    slerp = Slerp(key_times, key_rots)      # 创建插值器
+    interp_rots = slerp(np.linspace(0, 1, num_frame))   # 通过np.linspace获取插值中的时间点
     make_rot = interp_rots.as_quat()
 
     make_dof = np.linspace(last_dof, first_dof, num=num_frame)
 
     return make_trans, make_rot, make_dof
 
-def process_motion_sequences(seq1, seq2):
+def process_motion_sequences(seq1, seq2, dof_axis):
     # 获取seq1的最后一帧 作为第二序列的起点
     last_trans_s1 = seq1['root_trans_offset'][-1]
     last_rot_s1 = R.from_quat(seq1['root_rot'][-1])
@@ -42,6 +48,7 @@ def process_motion_sequences(seq1, seq2):
     new_trans = []
     new_rot = []
     new_dof = []
+    new_pose_aa = []
 
     for i in range(len(seq2['root_rot'])):
 
@@ -58,6 +65,7 @@ def process_motion_sequences(seq1, seq2):
         new_trans.append(final_trans)
         new_rot.append(final_rot.as_quat())
         new_dof.append(seq2['dof'][i])
+        new_pose_aa.append(obtain_pose_aa(final_rot.as_quat(), seq2['dof'][i], dof_axis))
     
     inter_trans, inter_rot, inter_dof = make_interpolation(seq1['root_trans_offset'][-1], new_trans[0],
                                         seq1['root_rot'][-1], new_rot[0], seq1['dof'][-1], new_dof[0], 30)
@@ -67,27 +75,32 @@ def process_motion_sequences(seq1, seq2):
     new_dof = list(seq1['dof']) + list(inter_dof) + new_dof
     return new_trans, new_rot, new_dof
 
-def main(pkl_path1, pkl_path2):
-    motion1 = joblib.load(pkl_path1)
-    motion2 = joblib.load(pkl_path2)
+def main(pkl_lists, dof_axis_path):
+    dof_axis = np.load(dof_axis_path)
 
-    motion = motion1.copy()
+    motion = joblib.load(pkl_lists[0])
     k = list(motion.keys())[0]
 
-    motion_data1 = motion1[list(motion1.keys())[0]]
-    motion_data2 = motion2[list(motion2.keys())[0]]
+    for i in range(1, len(pkl_lists)):
+        motion1 = motion.copy()
+        motion2 = joblib.load(pkl_lists[i])
+        motion_data1 = motion1[list(motion1.keys())[0]]
+        motion_data2 = motion2[list(motion2.keys())[0]]
 
-    # 处理运动序列
-    new_trans, new_rots, new_dofs = process_motion_sequences(motion_data1, motion_data2)
+        # 处理运动序列
+        new_trans, new_rots, new_dofs = process_motion_sequences(motion_data1, motion_data2, dof_axis)
 
-    motion[k]['root_trans_offset'] = np.array(new_trans)
-    motion[k]['root_rot'] = np.array(new_rots)
-    motion[k]['dof'] = np.array(new_dofs)
+        motion[k]['root_trans_offset'] = np.array(new_trans)
+        motion[k]['root_rot'] = np.array(new_rots)
+        motion[k]['dof'] = np.array(new_dofs)
+
     print(motion[k]['dof'].shape)
     joblib.dump(motion, "/home/ubuntu/projects/tool_kit/assets/pkl/combine.pkl")
 
 if __name__ == "__main__":
-    pkl_path1 = "/home/ubuntu/projects/tool_kit/assets/pkl/slowwalk_05_01_high_inter.pkl"
-    pkl_path2 = "/home/ubuntu/projects/tool_kit/assets/pkl/Walk-Bendover_walkback.pkl"
-
-    main(pkl_path1, pkl_path2)
+    pkl_lists = [
+        "/home/ubuntu/projects/tool_kit/assets/pkl/slowwalk_05_01_high_inter.pkl",
+        "/home/ubuntu/projects/tool_kit/assets/pkl/Walk-Bendover_walkback.pkl"
+    ]
+    dof_axis_path = "interpolation/g1_23dof_axis.npy"
+    main(pkl_lists, dof_axis_path)
